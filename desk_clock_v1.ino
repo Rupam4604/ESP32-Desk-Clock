@@ -28,8 +28,9 @@ const float longitude = 88.3639;
 // ========================================
 
 float weatherTemperature = 0.0;
+float weatherFeelsLike = 0.0;
+int weatherHumidity = 0;
 String weatherCondition = "WAITING";
-
 // ========================================
 // LCD
 // ========================================
@@ -303,12 +304,13 @@ void updateClock()
   char weatherBuffer[21];
 
   snprintf(
-    weatherBuffer,
-    sizeof(weatherBuffer),
-    "TEMP %.0f C %-7s",
-    weatherTemperature,
-    weatherCondition.c_str()
-  );
+  weatherBuffer,
+  sizeof(weatherBuffer),
+  "TEMP %.0fC FL%.0fC H%d%%",
+  weatherTemperature,
+  weatherFeelsLike,
+  weatherHumidity
+);
 
   lcd.setCursor(0, 3);
   lcd.print("                    ");
@@ -421,7 +423,10 @@ void getWeather()
     // ====================================
 
     weatherTemperature =
-      doc["main"]["temp"].as<float>();
+  doc["main"]["temp"].as<float>();
+
+    weatherFeelsLike =
+  doc["main"]["feels_like"].as<float>();
 
 
     // ====================================
@@ -429,7 +434,10 @@ void getWeather()
     // ====================================
 
     weatherCondition =
-      doc["weather"][0]["main"].as<String>();
+  doc["weather"][0]["main"].as<String>();
+
+    weatherHumidity =
+  doc["main"]["humidity"].as<int>();
 
 
     // ====================================
@@ -437,11 +445,19 @@ void getWeather()
     // ====================================
 
     Serial.print("Temperature: ");
-    Serial.print(weatherTemperature);
-    Serial.println(" C");
+Serial.print(weatherTemperature);
+Serial.println(" C");
 
-    Serial.print("Condition: ");
-    Serial.println(weatherCondition);
+Serial.print("Feels Like: ");
+Serial.print(weatherFeelsLike);
+Serial.println(" C");
+
+Serial.print("Humidity: ");
+Serial.print(weatherHumidity);
+Serial.println(" %");
+
+Serial.print("Condition: ");
+Serial.println(weatherCondition);
   }
 
 
