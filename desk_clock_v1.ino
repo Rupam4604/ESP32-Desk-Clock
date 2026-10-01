@@ -7,19 +7,9 @@
 #include "secrets.h"
 
 // ========================================
-// Wi-Fi
-// ========================================
-
-//* const char* ssid = "YOUR_WIFI_NAME";             #add yours wifi name
-//* const char* password = "YOUR_WIFI_PASSWORD";     #add yours wifi pasword
-
-// ========================================
-// OpenWeather API
-// ========================================
-
-//* const char* apiKey = "YOUR_OPENWEATHER_API_KEY";   #add yours api key
-
 // Kolkata coordinates
+// ========================================
+
 const float latitude = 22.5726;
 const float longitude = 88.3639;
 
@@ -31,6 +21,7 @@ float weatherTemperature = 0.0;
 float weatherFeelsLike = 0.0;
 int weatherHumidity = 0;
 String weatherCondition = "WAITING";
+
 // ========================================
 // LCD
 // ========================================
@@ -86,7 +77,6 @@ int lastMonth = -1;
 int lastYear = -1;
 int lastWeekday = -1;
 
-
 // ========================================
 // SETUP
 // ========================================
@@ -136,6 +126,10 @@ void setup()
     "pool.ntp.org"
   );
 
+  // ======================================
+  // Wait for NTP synchronization
+  // ======================================
+
   lcd.clear();
 
   lcd.setCursor(0, 0);
@@ -144,8 +138,30 @@ void setup()
   lcd.setCursor(0, 1);
   lcd.print("Synchronizing...");
 
-  // Give NTP time to synchronize
-  delay(2000);
+  struct tm timeinfo;
+
+  int retry = 0;
+
+  while (!getLocalTime(&timeinfo) && retry < 20)
+  {
+    Serial.println("Waiting for NTP...");
+    delay(500);
+    retry++;
+  }
+
+  if (retry < 20)
+  {
+    Serial.println("NTP synchronized!");
+
+    Serial.print("Current time: ");
+    Serial.println(&timeinfo, "%d/%m/%Y %H:%M:%S");
+  }
+  else
+  {
+    Serial.println("NTP synchronization failed!");
+  }
+
+  delay(1000);
 
   lcd.clear();
 
@@ -164,10 +180,9 @@ void setup()
 
   getWeather();
 
-  // Force the first weather update timer
+  // Start weather timer
   previousWeatherMillis = millis();
 }
-
 
 // ========================================
 // LOOP
@@ -200,7 +215,6 @@ void loop()
   }
 }
 
-
 // ========================================
 // UPDATE CLOCK
 // ========================================
@@ -223,25 +237,45 @@ void updateClock()
     return;
   }
 
-
   // ======================================
-  // LINE 1 - TIME
+  // LINE 1 - 12 HOUR TIME
   // ======================================
 
   char timeBuffer[21];
 
+  int hour12 = timeinfo.tm_hour % 12;
+
+  if (hour12 == 0)
+  {
+    hour12 = 12;
+  }
+
+  const char* ampm;
+
+  if (timeinfo.tm_hour < 12)
+  {
+    ampm = "AM";
+  }
+  else
+  {
+    ampm = "PM";
+  }
+
   snprintf(
     timeBuffer,
     sizeof(timeBuffer),
-    "TIME %02d:%02d:%02d",
-    timeinfo.tm_hour,
+    "TIME %02d:%02d:%02d %s",
+    hour12,
     timeinfo.tm_min,
-    timeinfo.tm_sec
+    timeinfo.tm_sec,
+    ampm
   );
 
   lcd.setCursor(0, 0);
-  lcd.print(timeBuffer);
+  lcd.print("                    ");
 
+  lcd.setCursor(0, 0);
+  lcd.print(timeBuffer);
 
   // ======================================
   // LINE 2 - DATE
@@ -266,13 +300,15 @@ void updateClock()
     );
 
     lcd.setCursor(0, 1);
+    lcd.print("                    ");
+
+    lcd.setCursor(0, 1);
     lcd.print(dateBuffer);
 
     lastDay = timeinfo.tm_mday;
     lastMonth = timeinfo.tm_mon;
     lastYear = timeinfo.tm_year;
   }
-
 
   // ======================================
   // LINE 3 - DAY
@@ -291,11 +327,13 @@ void updateClock()
     );
 
     lcd.setCursor(0, 2);
+    lcd.print("                    ");
+
+    lcd.setCursor(0, 2);
     lcd.print(dayBuffer);
 
     lastWeekday = timeinfo.tm_wday;
   }
-
 
   // ======================================
   // LINE 4 - WEATHER
@@ -304,13 +342,13 @@ void updateClock()
   char weatherBuffer[21];
 
   snprintf(
-  weatherBuffer,
-  sizeof(weatherBuffer),
-  "TEMP %.0fC FL%.0fC H%d%%",
-  weatherTemperature,
-  weatherFeelsLike,
-  weatherHumidity
-);
+    weatherBuffer,
+    sizeof(weatherBuffer),
+    "TEMP %.0fC FL%.0fC H%d%%",
+    weatherTemperature,
+    weatherFeelsLike,
+    weatherHumidity
+  );
 
   lcd.setCursor(0, 3);
   lcd.print("                    ");
@@ -318,7 +356,6 @@ void updateClock()
   lcd.setCursor(0, 3);
   lcd.print(weatherBuffer);
 }
-
 
 // ========================================
 // GET WEATHER
@@ -342,7 +379,6 @@ void getWeather()
     return;
   }
 
-
   // ======================================
   // Create API URL
   // ======================================
@@ -362,10 +398,7 @@ void getWeather()
 
   url += "&units=metric";
 
-
-  Serial.print("Request URL: ");
-  Serial.println("https://api.openweathermap.org/data/2.5/weather");
-
+  Serial.println("Requesting weather data...");
 
   // ======================================
   // Create HTTP client
@@ -375,7 +408,6 @@ void getWeather()
 
   http.begin(url);
 
-
   // ======================================
   // Send GET request
   // ======================================
@@ -384,7 +416,6 @@ void getWeather()
 
   Serial.print("Weather HTTP Code: ");
   Serial.println(httpCode);
-
 
   // ======================================
   // Successful response
@@ -396,7 +427,6 @@ void getWeather()
 
     Serial.println("Weather API response received.");
 
-
     // ====================================
     // Parse JSON
     // ====================================
@@ -405,7 +435,6 @@ void getWeather()
 
     DeserializationError error =
       deserializeJson(doc, payload);
-
 
     if (error)
     {
@@ -417,49 +446,53 @@ void getWeather()
       return;
     }
 
-
     // ====================================
     // Extract temperature
     // ====================================
 
     weatherTemperature =
-  doc["main"]["temp"].as<float>();
+      doc["main"]["temp"].as<float>();
+
+    // ====================================
+    // Extract feels-like temperature
+    // ====================================
 
     weatherFeelsLike =
-  doc["main"]["feels_like"].as<float>();
+      doc["main"]["feels_like"].as<float>();
 
+    // ====================================
+    // Extract humidity
+    // ====================================
+
+    weatherHumidity =
+      doc["main"]["humidity"].as<int>();
 
     // ====================================
     // Extract weather condition
     // ====================================
 
     weatherCondition =
-  doc["weather"][0]["main"].as<String>();
-
-    weatherHumidity =
-  doc["main"]["humidity"].as<int>();
-
+      doc["weather"][0]["main"].as<String>();
 
     // ====================================
     // Serial output
     // ====================================
 
     Serial.print("Temperature: ");
-Serial.print(weatherTemperature);
-Serial.println(" C");
+    Serial.print(weatherTemperature);
+    Serial.println(" C");
 
-Serial.print("Feels Like: ");
-Serial.print(weatherFeelsLike);
-Serial.println(" C");
+    Serial.print("Feels Like: ");
+    Serial.print(weatherFeelsLike);
+    Serial.println(" C");
 
-Serial.print("Humidity: ");
-Serial.print(weatherHumidity);
-Serial.println(" %");
+    Serial.print("Humidity: ");
+    Serial.print(weatherHumidity);
+    Serial.println(" %");
 
-Serial.print("Condition: ");
-Serial.println(weatherCondition);
+    Serial.print("Condition: ");
+    Serial.println(weatherCondition);
   }
-
 
   // ======================================
   // HTTP request failed
@@ -472,7 +505,6 @@ Serial.println(weatherCondition);
 
     weatherCondition = "ERROR";
   }
-
 
   // ======================================
   // Close HTTP connection
